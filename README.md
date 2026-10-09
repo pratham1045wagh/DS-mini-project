@@ -1,4 +1,4 @@
-# Distributed Collaborative Document Management & Synchronization System (FA-1 + FA-2)
+# Distributed Collaborative Document Management & Synchronization System 
 
 A production-grade, local distributed system combining **Unit 1 & 2 (FA-1)** foundations with **Unit 3 & 4 (FA-2)** advanced concepts: Lamport Logical Clocks, Vector Clocks with concurrent conflict detection, Bully Algorithm Leader Election, Distributed Mutual Exclusion, Deadlock Detection via Wait-For Graphs, Document Versioning, and Node Recovery with Re-Synchronization.
 
