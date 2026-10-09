@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Distributed Document Management & Synchronization System (FA-1)</title>
+  <meta name="description" content="FA-1 Distributed Document Management System with JSON-RPC 2.0, P2P streaming, access control, and fault tolerance.">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- LOGIN SCREEN (shown when not authenticated)                            -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div id="loginScreen" class="login-screen" style="display:none;">
+    <div class="login-card">
+      <div class="login-logo">
+        <i class="fa-solid fa-diagram-project"></i>
+      </div>
+      <div class="login-title">Distributed Document System</div>
+
+
+      <div id="loginError" class="login-error" style="display:none;"></div>
+
+      <div class="form-group">
+        <label for="loginUserId">User ID</label>
+        <select id="loginUserId" class="form-control">
+          <option value="user_a">user_a (User A)</option>
+          <option value="user_b">user_b (User B)</option>
+          <option value="user_c">user_c (User C)</option>
+          <option value="user_d">user_d (User D)</option>
+          <option value="user_e">user_e (User E)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" class="form-control" placeholder="Enter password" autocomplete="current-password">
+
+      </div>
+
+      <button class="btn btn-cyan" id="loginBtn" style="width:100%; margin-top:1rem; padding: 0.75rem;">
+        <i class="fa-solid fa-right-to-bracket"></i> Sign In
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- MAIN DASHBOARD (hidden until logged in)                                -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <div id="mainApp" style="display:none;">
+
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+      <div class="brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-diagram-project"></i>
+        </div>
+        <div>
+          <div class="brand-title">Distributed Document Management &amp; Sync System</div>
+
+        </div>
+      </div>
+
+      <!-- Logged-In User Display -->
+      <div class="user-bar">
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">
+          <i class="fa-solid fa-circle-user"></i> Logged in as:
+        </span>
+        <span id="loggedInUserDisplay" class="user-display-badge">
+          <i class="fa-solid fa-user"></i> <span id="loggedInUserName">—</span>
+        </span>
+        <button class="btn-logout" id="openChatNavBtn" title="Open Real-time User Chat" style="background: rgba(6, 182, 212, 0.15); border-color: rgba(6, 182, 212, 0.4); color: var(--accent-cyan); margin-right: 0.5rem;">
+          <i class="fa-solid fa-comments"></i> Chat <span id="chatNavBadge" class="chat-badge-pill" style="display:none;">0</span>
+        </button>
+        <button class="btn-logout" id="logoutBtn" title="Sign out">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </button>
+      </div>
+
+    </nav>
+
+    <!-- Leader & Cluster Coordination Banner (FA-2) -->
+    <div class="leader-banner-container">
+      <div class="leader-banner" id="leaderBanner">
+        <div class="leader-info-group">
+          <div class="leader-stat-item">
+            <span class="leader-stat-label">Current Leader</span>
+            <span class="leader-stat-value" id="currentLeaderDisplay">
+              <i class="fa-solid fa-crown" style="color: var(--accent-yellow);"></i>
+              <span id="currentLeaderText">Master Coordinator</span>
+            </span>
+          </div>
+          <div class="leader-stat-item">
+            <span class="leader-stat-label">Previous Leader</span>
+            <span class="leader-stat-value" id="prevLeaderText" style="font-size: 0.95rem; color: var(--text-muted);">None</span>
+          </div>
+          <div class="leader-stat-item">
+            <span class="leader-stat-label">Election Status</span>
+            <span id="electionStatusBadge" class="badge" style="color: var(--accent-green); background: rgba(5,150,105,0.1); border-color: rgba(5,150,105,0.3); font-weight:700;">
+              COMPLETED
+            </span>
+          </div>
+          <div class="leader-stat-item">
+            <span class="leader-stat-label">Coordinator State</span>
+            <span id="coordinatorStatusBadge" class="badge" style="color: var(--accent-cyan); background: rgba(2,132,199,0.1); border-color: rgba(2,132,199,0.3); font-weight:700;">
+              ONLINE (Rank 100)
+            </span>
+          </div>
+        </div>
+        <div class="leader-controls-group">
+          <button class="btn btn-purple" id="triggerElectionBtn" title="Run Bully Algorithm Election" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-bolt"></i> Trigger Bully Election
+          </button>
+          <button class="btn btn-red" id="killCoordinatorBtn" title="Simulate Coordinator Failure" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-power-off"></i> Kill Coordinator
+          </button>
+          <button class="btn btn-green" id="reviveCoordinatorBtn" title="Revive Coordinator (Assert Priority)" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-rotate"></i> Revive Coordinator
+          </button>
+        </div>
+      </div>
+
+      <!-- Vector Clock Conflict Alert Banner (FA-2) -->
+      <div id="conflictAlertBox" class="conflict-alert" style="display: none;">
+        <div>
+          <div class="conflict-alert-title">
+            <i class="fa-solid fa-triangle-exclamation"></i> CONFLICT DETECTED (Concurrent Updates via Vector Clock)
+          </div>
+          <div style="font-size: 0.85rem; color: #475569; margin-top: 0.2rem;" id="conflictAlertSummary">
+            Concurrent modifications detected on document. Both branches preserved.
+          </div>
+        </div>
+        <button class="btn btn-red" id="openConflictResolveBtn" style="padding: 0.45rem 0.9rem; font-size: 0.82rem;">
+          <i class="fa-solid fa-code-merge"></i> Resolve Conflict
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-grid" id="dashboardGrid">
+
+      <!-- Cluster Topology Visualizer Panel -->
+      <section class="glass-panel" id="topologyPanel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <button id="toggleTopologyBtn" class="btn-toggle-icon" title="Hide/Collapse to Left Side" style="margin-right: 0.3rem;">
+              <i class="fa-solid fa-chevron-left" id="topologyToggleIcon"></i>
+            </button>
+            <span class="panel-title-text">
+              <i class="fa-solid fa-network-wired"></i>
+              Cluster Topology &amp; Live Node Status
+            </span>
+          </div>
+          <span class="badge panel-header-badge" style="color: var(--accent-cyan);">P2P Sync Active</span>
+        </div>
+
+        <div id="topologyContentBody">
+          <div class="topology-container">
+            <svg id="topologySvg"></svg>
+          </div>
+
+          <!-- Fault Injection Controls -->
+          <div class="panel-title" style="font-size: 0.95rem; margin-top: 1.2rem;">
+            <i class="fa-solid fa-triangle-exclamation" style="color: var(--accent-yellow);"></i>
+            Fault Injection Control Panel (Live Failover &amp; Recovery Test)
+          </div>
+
+          <div class="fault-controls">
+            <button class="btn btn-red btn-fault" data-nodeid="node_1" data-action="kill">
+              <i class="fa-solid fa-power-off"></i> Kill Node 1 (Alpha)
+            </button>
+            <button class="btn btn-green btn-fault" data-nodeid="node_1" data-action="revive">
+              <i class="fa-solid fa-bolt"></i> Revive &amp; Sync Node 1
+            </button>
+
+            <button class="btn btn-red btn-fault" data-nodeid="node_2" data-action="kill">
+              <i class="fa-solid fa-power-off"></i> Kill Node 2 (Beta)
+            </button>
+            <button class="btn btn-green btn-fault" data-nodeid="node_2" data-action="revive">
+              <i class="fa-solid fa-bolt"></i> Revive &amp; Sync Node 2
+            </button>
+
+            <button class="btn btn-red btn-fault" data-nodeid="node_3" data-action="kill">
+              <i class="fa-solid fa-power-off"></i> Kill Node 3 (Gamma)
+            </button>
+            <button class="btn btn-green btn-fault" data-nodeid="node_3" data-action="revive">
+              <i class="fa-solid fa-bolt"></i> Revive &amp; Sync Node 3
+            </button>
+
+            <button class="btn btn-red btn-fault" data-nodeid="node_4" data-action="kill">
+              <i class="fa-solid fa-power-off"></i> Kill Node 4 (Delta)
+            </button>
+            <button class="btn btn-green btn-fault" data-nodeid="node_4" data-action="revive">
+              <i class="fa-solid fa-bolt"></i> Revive &amp; Sync Node 4
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Document Manager & Access Control Workspace -->
+      <section class="glass-panel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-folder-open"></i>
+            Document Manager &amp; Access Control Workspace
+          </div>
+          <span class="badge" style="color: var(--accent-green);">Replication Factor: 2</span>
+        </div>
+
+        <!-- Drag & Drop Upload Zone -->
+        <div class="upload-zone" id="dropZone">
+          <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2rem; color: var(--accent-cyan); margin-bottom: 0.5rem;"></i>
+          <div style="font-weight: 600; font-size: 0.95rem;">Drag &amp; drop file to stream upload</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">
+            Uploading as <strong id="activeUserUploadLabel" style="color: var(--accent-cyan);">—</strong> • Split into 512KB chunks with SHA-256 integrity
+          </div>
+          <input type="file" id="fileInput" style="display: none;">
+        </div>
+
+        <!-- Quick Text Document Creator -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border); border-radius: 10px; padding: 1rem; margin-bottom: 1rem;">
+          <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; color: var(--accent-cyan);">
+            <i class="fa-solid fa-pen-to-square"></i> Create Quick Text Document
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <input type="text" id="quickDocTitle" class="form-control" placeholder="Document Title (e.g. Report.txt)" style="flex: 1;">
+            <button class="btn btn-cyan" id="createQuickDocBtn" style="padding: 0.5rem 1rem;">Create &amp; Sync</button>
+          </div>
+          <textarea id="quickDocContent" class="form-control" placeholder="Write document contents here..." style="width: 100%; height: 60px; resize: none;"></textarea>
+        </div>
+
+        <!-- Progress Stream Indicator -->
+        <div id="progressWrapper" style="display: none; margin-bottom: 1rem;">
+          <div id="progressText" style="font-size: 0.85rem; font-weight: 500; color: var(--accent-cyan);">Processing stream...</div>
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+
+        <!-- Document View Tabs (My Documents / Shared With Me) with Search and Refresh -->
+        <div class="tabs-header" style="justify-content: space-between; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="tab-btn active" id="tabMyDocs" data-tab="mydocs">
+              <i class="fa-solid fa-box-archive"></i> My Documents (<span id="myDocsCount">0</span>)
+            </button>
+            <button class="tab-btn" id="tabSharedWithMe" data-tab="shared">
+              <i class="fa-solid fa-share-nodes"></i> Shared With Me (<span id="sharedCount">0</span>)
+            </button>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; padding-bottom: 0.4rem;">
+            <div style="position: relative;">
+              <input type="text" id="docSearchInput" class="form-control" placeholder="Search documents..." style="padding: 0.35rem 0.6rem 0.35rem 1.8rem; font-size: 0.8rem; width: 180px; height: 32px;">
+              <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); font-size: 0.75rem; color: var(--text-muted); pointer-events: none;"></i>
+            </div>
+            <button class="btn btn-cyan" id="refreshDocsBtn" title="Refresh Document Catalog" style="padding: 0.35rem 0.75rem; font-size: 0.8rem; height: 32px; display: inline-flex; align-items: center; gap: 0.35rem;">
+              <i class="fa-solid fa-arrows-rotate" id="refreshDocsIcon"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Document Catalog Table -->
+        <div class="doc-table-wrapper">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Version &amp; Vector Clock</th>
+                <th>Owner / Access</th>
+                <th>Lock Status</th>
+                <th>Replicas</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="docTableBody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Distributed Event Timeline Panel (Full Width) -->
+      <section class="glass-panel grid-full" id="timelinePanel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-cyan);"></i>
+            Distributed Event Timeline &amp; Lamport Logical Clocks
+          </div>
+          <span class="badge" style="color: var(--accent-cyan);">Unit 3: Time &amp; Global State</span>
+        </div>
+
+        <!-- Live Logical Clocks Row -->
+        <div class="clocks-container" id="clocksContainer">
+          <div class="clock-card">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">COORDINATOR</div>
+              <div style="font-size: 0.8rem; font-weight: 500;">Logical Clock</div>
+            </div>
+            <div class="clock-val" id="clockCoordinator">L=0</div>
+          </div>
+          <div class="clock-card">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">NODE 1 (ALPHA)</div>
+              <div style="font-size: 0.8rem; font-weight: 500;">Logical Clock</div>
+            </div>
+            <div class="clock-val" id="clockNode1">L=0</div>
+          </div>
+          <div class="clock-card">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">NODE 2 (BETA)</div>
+              <div style="font-size: 0.8rem; font-weight: 500;">Logical Clock</div>
+            </div>
+            <div class="clock-val" id="clockNode2">L=0</div>
+          </div>
+          <div class="clock-card">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">NODE 3 (GAMMA)</div>
+              <div style="font-size: 0.8rem; font-weight: 500;">Logical Clock</div>
+            </div>
+            <div class="clock-val" id="clockNode3">L=0</div>
+          </div>
+          <div class="clock-card">
+            <div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">NODE 4 (DELTA)</div>
+              <div style="font-size: 0.8rem; font-weight: 500;">Logical Clock</div>
+            </div>
+            <div class="clock-val" id="clockNode4">L=0</div>
+          </div>
+        </div>
+
+        <div class="timeline-table-wrapper">
+          <table class="timeline-table">
+            <thead>
+              <tr>
+                <th style="width: 100px;">Lamport</th>
+                <th style="width: 130px;">Node / User</th>
+                <th style="width: 120px;">Operation</th>
+                <th style="width: 170px;">Document</th>
+                <th>Distributed Event Details</th>
+                <th style="width: 90px;">Time</th>
+              </tr>
+            </thead>
+            <tbody id="timelineTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Distributed Mutual Exclusion & Deadlock Detection Panel -->
+      <section class="glass-panel" id="coordinationPanel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-lock" style="color: var(--accent-yellow);"></i>
+            Mutual Exclusion &amp; Deadlock Detection
+          </div>
+          <span class="badge" style="color: var(--accent-yellow);">Unit 4: Coordination</span>
+        </div>
+
+        <div style="margin-bottom: 1.25rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">
+              <i class="fa-solid fa-key"></i> Active Document Locks (Distributed Mutex)
+            </span>
+            <span id="activeLocksCount" class="badge" style="font-size: 0.72rem;">0 Active</span>
+          </div>
+          <div style="max-height: 140px; overflow-y: auto; border: 1px solid var(--panel-border); border-radius: 8px;">
+            <table class="timeline-table">
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Locked By</th>
+                  <th>Lease Remaining</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="activeLocksTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">
+              <i class="fa-solid fa-diagram-project"></i> Wait-For Graph (Deadlock Detection)
+            </span>
+            <span id="deadlockStatusBadge" class="badge" style="color: var(--accent-green); background: rgba(5,150,105,0.1); font-weight:700;">
+              NO DEADLOCK
+            </span>
+          </div>
+          <div class="wfg-box" id="wfgContainer">
+            <div style="color: var(--text-muted); font-size: 0.82rem; text-align: center;">
+              No cyclic wait dependencies detected in Wait-For Graph.
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+            <button class="btn btn-red" id="simulateDeadlockBtn" style="padding: 0.4rem 0.8rem; font-size: 0.78rem;">
+              <i class="fa-solid fa-bug"></i> Simulate Deadlock (User A ⇄ User B)
+            </button>
+            <button class="btn btn-green" id="resolveDeadlockBtn" style="padding: 0.4rem 0.8rem; font-size: 0.78rem;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Resolve Deadlock
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bully Election & Node Recovery Synchronization -->
+      <section class="glass-panel" id="electionRecoveryPanel">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-ranking-star" style="color: var(--accent-purple);"></i>
+            Bully Election &amp; Node Recovery Re-Sync
+          </div>
+          <span class="badge" style="color: var(--accent-purple);">Fault Tolerance &amp; Sync</span>
+        </div>
+
+        <div style="margin-bottom: 1.25rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);">
+              <i class="fa-solid fa-arrows-spin"></i> Node Recovery &amp; Re-Synchronization
+            </span>
+            <button class="btn btn-cyan" id="manualSyncAllBtn" style="padding: 0.25rem 0.6rem; font-size: 0.72rem;">
+              <i class="fa-solid fa-arrows-rotate"></i> Sync Nodes
+            </button>
+          </div>
+          <div id="nodeRecoveryCards" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <!-- Dynamically populated node recovery status cards -->
+          </div>
+        </div>
+
+        <div>
+          <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main); margin-bottom: 0.5rem;">
+            <i class="fa-solid fa-list-check"></i> Leader Election &amp; Recovery Logs
+          </div>
+          <div class="log-terminal" id="electionLogTerminal" style="height: 150px; font-size: 0.75rem;">
+            <!-- Bully election logs and sync logs -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Protocol Inspector & Log Terminal (Full Width) with Filter Tabs -->
+      <section class="glass-panel grid-full">
+        <div class="panel-header">
+          <div class="panel-title">
+            <i class="fa-solid fa-terminal"></i>
+            Distributed Event / Message Monitor
+          </div>
+          <span class="badge" style="color: var(--accent-purple);">Live Log Stream</span>
+        </div>
+
+        <div class="log-category-tabs" id="logFilterTabs">
+          <button class="log-filter-btn active" data-filter="all">All Events</button>
+          <button class="log-filter-btn" data-filter="[RPC]">[RPC]</button>
+          <button class="log-filter-btn" data-filter="[P2P]">[P2P]</button>
+          <button class="log-filter-btn" data-filter="[CLOCK]">[CLOCK]</button>
+          <button class="log-filter-btn" data-filter="[VECTOR]">[VECTOR]</button>
+          <button class="log-filter-btn" data-filter="[LOCK]">[LOCK]</button>
+          <button class="log-filter-btn" data-filter="[ELECTION]">[ELECTION]</button>
+          <button class="log-filter-btn" data-filter="[DEADLOCK]">[DEADLOCK]</button>
+          <button class="log-filter-btn" data-filter="[RECOVERY]">[RECOVERY]</button>
+        </div>
+
+        <div class="log-terminal" id="logTerminal">
+          <!-- Live logs appends here -->
+        </div>
+      </section>
+
+    </main>
+
+  </div><!-- /#mainApp -->
+
+  <!-- Share Document Modal -->
+  <div class="modal-overlay" id="shareModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-share-nodes" style="color: var(--accent-cyan);"></i> Share Document Access
+        </div>
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Selected Document</label>
+        <input type="text" id="shareDocNameInput" class="form-control" readonly style="opacity: 0.8;">
+        <input type="hidden" id="shareDocIdInput">
+      </div>
+      <div class="form-group">
+        <label>Select Target User to Share With</label>
+        <select id="shareTargetUserSelect" class="form-control">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Select Permission Level</label>
+        <select id="sharePermissionSelect" class="form-control">
+          <option value="READ">READ (View &amp; Download Only)</option>
+          <option value="WRITE">WRITE (View, Download &amp; Re-share)</option>
+          <option value="REVOKE" style="color: #ef4444; font-weight: 600;">REVOKE ACCESS (Remove User Permission)</option>
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <button class="btn" id="cancelShareBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Cancel</button>
+        <button class="btn btn-cyan" id="confirmShareBtn">Grant Permission</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File View / Preview Modal -->
+  <div class="modal-overlay" id="viewModal">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-file-lines" style="color: var(--accent-purple);"></i>
+          <span id="viewDocTitle">Document Viewer</span>
+          <span id="copyToast" class="copy-toast">Copied to clipboard!</span>
+        </div>
+        <button class="modal-close" id="viewModalCloseBtn">&times;</button>
+      </div>
+
+      <!-- Metadata summary bar -->
+      <div class="view-meta-bar" id="viewMetaBar">
+        <div class="view-meta-item">
+          <span class="view-meta-label">Size / Chunks</span>
+          <span class="view-meta-val" id="viewMetaSize">—</span>
+        </div>
+        <div class="view-meta-item">
+          <span class="view-meta-label">Owner</span>
+          <span class="view-meta-val" id="viewMetaOwner">—</span>
+        </div>
+        <div class="view-meta-item">
+          <span class="view-meta-label">Access Level</span>
+          <span class="view-meta-val" id="viewMetaAccess">—</span>
+        </div>
+        <div class="view-meta-item">
+          <span class="view-meta-label">Healthy Replicas</span>
+          <span class="view-meta-val" id="viewMetaReplicas">—</span>
+        </div>
+      </div>
+
+      <!-- Main Document Content Preview Area -->
+      <div class="file-preview-wrapper" id="viewModalBody">
+        <div style="margin: auto; text-align: center; color: var(--text-muted);">
+          <i class="fa-solid fa-spinner fa-spin" style="font-size: 2rem; color: var(--accent-cyan); margin-bottom: 0.75rem;"></i>
+          <div>Reconstructing document chunks from storage nodes...</div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; gap: 0.5rem;">
+        <button class="btn btn-purple" id="viewCopyBtn" style="display: none; padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+          <i class="fa-regular fa-copy"></i> Copy Content
+        </button>
+        <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+          <button class="btn btn-green" id="viewDownloadBtn" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-cloud-arrow-down"></i> Download File
+          </button>
+          <button class="btn" id="viewCloseBtn" style="background: rgba(255,255,255,0.08); color: #fff; padding: 0.4rem 0.8rem; font-size: 0.8rem;">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Quick Share Document in Chat Modal -->
+  <div class="modal-overlay" id="chatSelectDocModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-file-arrow-up" style="color: var(--accent-cyan);"></i> Select Document to Share in Chat
+        </div>
+        <button class="modal-close" id="chatSelectDocCloseBtn">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Select Document from My Library</label>
+        <select id="chatSelectDocDropdown" class="form-control">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <button class="btn" id="cancelChatSelectDocBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Cancel</button>
+        <button class="btn btn-cyan" id="confirmChatSelectDocBtn"><i class="fa-solid fa-paper-plane"></i> Share File</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forward Message / File Modal -->
+  <div class="modal-overlay" id="chatForwardModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-share" style="color: var(--accent-cyan);"></i> Forward Message / File
+        </div>
+        <button class="modal-close" id="chatForwardCloseBtn">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Forwarding Content</label>
+        <div id="chatForwardPreview" style="background: #f1f5f9; padding: 0.75rem; border-radius: 8px; font-size: 0.85rem; border: 1px solid #cbd5e1; margin-bottom: 0.5rem; color: #0f172a;"></div>
+      </div>
+      <div class="form-group">
+        <label>Select User to Forward To</label>
+        <select id="chatForwardUserSelect" class="form-control">
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <button class="btn" id="cancelChatForwardBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Cancel</button>
+        <button class="btn btn-cyan" id="confirmChatForwardBtn"><i class="fa-solid fa-share"></i> Forward Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Real-Time Chat Trigger Button -->
+  <button id="floatingChatBtn" class="floating-chat-btn" title="Open Real-time Chat">
+    <i class="fa-solid fa-comments"></i>
+    <span id="floatingChatBadge" class="chat-badge-floating" style="display: none;">0</span>
+  </button>
+
+  <!-- Real-Time User-to-User Chat Window / Drawer -->
+  <div id="chatDrawer" class="chat-drawer" style="display: none;">
+    <div class="chat-header">
+      <div class="chat-title">
+        <i class="fa-solid fa-comments" style="color: var(--accent-cyan);"></i>
+        <span>User-to-User Real-time Chat</span>
+      </div>
+      <div class="chat-header-actions">
+        <select id="chatTargetUserSelect" class="chat-user-select" title="Select Chat Partner">
+          <!-- Populated dynamically -->
+        </select>
+        <button id="closeChatBtn" class="chat-close-btn" title="Close Chat">&times;</button>
+      </div>
+    </div>
+
+    <div class="chat-body" id="chatMessageList">
+      <div class="chat-empty-state">
+        <i class="fa-regular fa-comment-dots" style="font-size: 2.5rem; color: var(--text-muted); margin-bottom: 0.5rem;"></i>
+        <div>No messages yet. Send a message to start chatting!</div>
+      </div>
+    </div>
+
+    <form id="chatForm" class="chat-footer">
+      <input type="file" id="chatFileInput" style="display: none;">
+      <button type="button" class="btn-chat-attach" id="chatAttachBtn" title="Upload & Share File from Device">
+        <i class="fa-solid fa-paperclip"></i>
+      </button>
+      <button type="button" class="btn-chat-attach" id="chatShareDocBtn" title="Share Existing Document from Library">
+        <i class="fa-solid fa-folder-open"></i>
+      </button>
+      <input type="text" id="chatInput" class="chat-input" placeholder="Type a message or attach a file..." autocomplete="off">
+      <button type="submit" class="btn btn-cyan chat-send-btn" id="chatSendBtn" title="Send">
+        <i class="fa-solid fa-paper-plane"></i>
+      </button>
+    </form>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+  <!-- FA-2 MODALS                                                            -->
+  <!-- ══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- 1. Document Editor / Update Modal (Mutual Exclusion & Vector Clocks) -->
+  <div class="modal-overlay" id="editDocModal">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-pen-to-square" style="color: var(--accent-cyan);"></i>
+          <span id="editDocModalTitle">Edit Document &amp; Create Version</span>
+        </div>
+        <button class="modal-close" id="editDocModalCloseBtn">&times;</button>
+      </div>
+
+      <!-- Lock Status Strip -->
+      <div style="background: rgba(248, 250, 252, 0.9); border: 1px solid var(--panel-border); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">MUTUAL EXCLUSION LOCK STATUS:</span>
+          <span id="editDocLockBadge" class="lock-badge-unlocked" style="margin-left: 0.5rem;">
+            <i class="fa-solid fa-lock-open"></i> UNLOCKED
+          </span>
+          <span id="editDocLockOwner" style="font-size: 0.8rem; margin-left: 0.5rem; color: #475569;"></span>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-cyan" id="editDocAcquireLockBtn" style="padding: 0.3rem 0.7rem; font-size: 0.75rem;">
+            <i class="fa-solid fa-key"></i> Acquire Lock
+          </button>
+          <button class="btn" id="editDocReleaseLockBtn" style="background: #e2e8f0; color: #334155; padding: 0.3rem 0.7rem; font-size: 0.75rem;">
+            <i class="fa-solid fa-unlock"></i> Release Lock
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <label style="margin-bottom:0;">Document Content</label>
+          <span id="editDocVersionBadge" class="badge" style="font-size: 0.72rem;">Version 1</span>
+        </div>
+        <textarea id="editDocTextarea" class="form-control" style="width: 100%; height: 200px; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; resize: vertical;" placeholder="Type new document content..."></textarea>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn-red" id="editDocSimulateConflictBtn" title="Simulate concurrent update without coordination" style="padding: 0.45rem 0.85rem; font-size: 0.8rem;">
+          <i class="fa-solid fa-code-branch"></i> Simulate Concurrent Update (Trigger Conflict)
+        </button>
+        <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+          <button class="btn" id="cancelEditDocBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Cancel</button>
+          <button class="btn btn-green" id="saveEditDocBtn">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Save New Version &amp; Replicate
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Document Version History Modal -->
+  <div class="modal-overlay" id="versionHistoryModal">
+    <div class="modal-box modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-clock-rotate-left" style="color: var(--accent-purple);"></i>
+          <span id="historyDocTitle">Document Version History</span>
+        </div>
+        <button class="modal-close" id="versionHistoryCloseBtn">&times;</button>
+      </div>
+
+      <div style="margin-bottom: 1rem; font-size: 0.85rem; color: var(--text-muted);" id="historyDocSubtitle">
+        Complete distributed version catalog with Lamport timestamps and Vector clocks.
+      </div>
+
+      <div class="timeline-table-wrapper" style="max-height: 350px;">
+        <table class="timeline-table">
+          <thead>
+            <tr>
+              <th style="width: 80px;">Version</th>
+              <th style="width: 120px;">Author</th>
+              <th style="width: 100px;">Lamport</th>
+              <th>Vector Clock</th>
+              <th>Checksum (SHA-256)</th>
+              <th style="width: 140px;">Updated At</th>
+            </tr>
+          </thead>
+          <tbody id="versionHistoryTableBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+        <button class="btn" id="closeVersionHistoryBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Conflict Resolution Modal -->
+  <div class="modal-overlay" id="conflictModal">
+    <div class="modal-box modal-lg" style="border: 2px solid var(--accent-red);">
+      <div class="modal-header">
+        <div class="modal-title" style="color: var(--accent-red);">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span id="conflictModalTitle">Vector Clock Conflict Detected</span>
+        </div>
+        <button class="modal-close" id="conflictModalCloseBtn">&times;</button>
+      </div>
+
+      <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 0.85rem; margin-bottom: 1rem; font-size: 0.85rem; color: #991b1b;">
+        <strong>Concurrent Branch Conflict:</strong> Two users have updated this document concurrently without establishing a "happened-before" relation. Vector clocks are concurrent (V_A || V_B).
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+        <!-- Version A -->
+        <div style="background: #f8fafc; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1rem;">
+          <div style="font-weight: 700; color: var(--accent-cyan); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+            <span>Branch Version A</span>
+            <span id="conflictVerALabel" class="badge">v1</span>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem;" id="conflictVerAMeta">—</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem;">Vector Clock:</div>
+          <div id="conflictVerAVector" class="vector-clock-tag" style="margin-bottom: 0.75rem;">{}</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem;">Content Preview:</div>
+          <pre id="conflictVerAPreview" style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem; font-size:0.8rem; height:80px; overflow-y:auto; font-family:'JetBrains Mono';"></pre>
+          <button class="btn btn-cyan" id="chooseVerABtn" style="width: 100%; margin-top: 0.75rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-check"></i> Choose Version A
+          </button>
+        </div>
+
+        <!-- Version B -->
+        <div style="background: #f8fafc; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1rem;">
+          <div style="font-weight: 700; color: var(--accent-purple); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+            <span>Branch Version B</span>
+            <span id="conflictVerBLabel" class="badge">v2</span>
+          </div>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.5rem;" id="conflictVerBMeta">—</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem;">Vector Clock:</div>
+          <div id="conflictVerBVector" class="vector-clock-tag" style="margin-bottom: 0.75rem;">{}</div>
+          <div style="font-size: 0.75rem; font-weight: 600; margin-bottom: 0.2rem;">Content Preview:</div>
+          <pre id="conflictVerBPreview" style="background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:0.5rem; font-size:0.8rem; height:80px; overflow-y:auto; font-family:'JetBrains Mono';"></pre>
+          <button class="btn btn-purple" id="chooseVerBBtn" style="width: 100%; margin-top: 0.75rem; font-size: 0.8rem;">
+            <i class="fa-solid fa-check"></i> Choose Version B
+          </button>
+        </div>
+      </div>
+
+      <!-- Option 3: Merge Content -->
+      <div style="background: #f1f5f9; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+        <div style="font-weight: 700; font-size: 0.88rem; margin-bottom: 0.5rem; color: #334155;">
+          <i class="fa-solid fa-code-merge"></i> Or Create a Merged Version
+        </div>
+        <textarea id="conflictMergeTextarea" class="form-control" style="width: 100%; height: 70px; font-family:'JetBrains Mono'; font-size: 0.82rem;" placeholder="Edit merged content here..."></textarea>
+        <button class="btn btn-green" id="confirmMergeBtn" style="margin-top: 0.5rem; font-size: 0.8rem;">
+          <i class="fa-solid fa-code-merge"></i> Save Merged Version (Vector Clock Component-Wise Max)
+        </button>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end;">
+        <button class="btn" id="conflictCancelBtn" style="background: rgba(255,255,255,0.08); color: #fff;">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/rpcClient.js"></script>
+  <script src="/js/streamClient.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

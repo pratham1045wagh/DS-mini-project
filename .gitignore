@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# Browser/session/test credentials
+cookies_*.txt
+login_result.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Runtime/generated storage data
+# Runtime/generated storage data
+storage_nodes/data/
